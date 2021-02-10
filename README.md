@@ -9,62 +9,88 @@ parser doesnt work yet but this is what a Hello World should look like (so far)
 
 ### hello world
 ```stupidc
-system(&BE6502);
+system(&BE_6502);
 include(&lcd);
 
-$lcd.init(&2l);
-
-$lcd.print(:hworld);
-halt();
+reset({
+  $lcd.init(:lcd.init.2l);
+  $lcd.print(:hworld);
+});
 
 data(:hworld, #"Hello, world!");
 ```
 
 #### hello world but more annoying
 ```stupidc
-system(&BE6502);
+system(&BE_6502);
 include(&lcd);
-
-$lcd.init(&2l);
-
 def(%i);
-set(%1,0);
 
-while(%i,{
-  $lcd.print(:hworld);
-  inc(%i);
+reset({
+  $lcd.init(:lcd.init.2l);
+  set(%1,0);
+
+  while(%i,{
+    $lcd.print(:hworld);
+    inc(%i);
+  });
 });
-
-halt();
 
 data(:hworld, #"Hello, world!");
 ```
 
 ### learn how to count with stupidc!
 ```stupidc
-system(&BE6502);
+system(&BE_6502);
 include(&lcd);
-
-$lcd.init(&2l);
-
 def(%i);
 
-while(%i,{
-  $lcd.print(*b2s(%i));
-  inc(%i);
+reset({
+  $lcd.init(:lcd.init.2l);
+  
+  while(%i,{
+    $lcd.print(*b2s(%i));
+    inc(%i);
+  )};
 });
 
-halt();
+```
+
+### interrupt handling demo
+```stupidc
+system(&BE_6502);
+include(&lcd);
+
+reset({
+  $lcd.init(:lcd.init.2l);
+  $lcd.print(:reset);
+)};
+
+irq({
+  $lcd.init(:lcd.init.2l);
+  $lcd.print(:irq);
+)};
+
+nmi({
+  $lcd.init(:lcd.init.2l);
+  $lcd.print(:nmi);
+});
+
+data(:reset, #"Reset");
+data(:irq, #"IRQ");
+data(:nmi, #"NMI");
 ```
 
 ### h
 ```stupidc
-system(&B6502);
+system(&BE_6502);
 include(&lcd);
 
-$lcd.init(&2l);
+reset({
+  $lcd.init(:lcd.init.2l);
 
-while(#1,{
-  $lcd.print(#'h');
+  while(#1,{
+    $lcd.print(#'h');
+  });
 });
 ```
