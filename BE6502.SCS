@@ -1,0 +1,22 @@
+# Ben Eater 6502 computer stupidc system definition
+
+=fakestack.start &H0000
+=fakestack.end &H00FE
+=fakestack.ptr &H00FF
+
+=workram.start &H0200
+# I need to double check this
+=workram.end &H3000
+
+#$assembler VASM\VASM.EXE
+
+{asm.header  PROCESSOR 6502
+  ORG $8000
+}
+
+# Note to self: Look up vectors
+#{asm.footer  ORG $0000
+#  DB
+#  DB
+#}
+
