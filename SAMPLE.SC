@@ -1,8 +1,8 @@
 system(#"BE6502.SCS");
 
-<include(#"LCD.SC");
+include(#"LCD.SC");
 include(#"VIA.SC");
-include(#"STUPIDC.SC");>
+include(#"STUPIDC.SC");
 
 def(%count);
 def(%lives);

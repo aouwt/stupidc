@@ -1,3 +1,4 @@
+DECLARE SUB run.mod.sub (subname$, args() AS ANY)
 DECLARE SUB parse (pgm AS STRING)
 DECLARE FUNCTION loadfile$ (filename$)
 DECLARE SUB mod.system (args() AS ANY)
@@ -49,6 +50,9 @@ DIM SHARED blanksymbol AS symbol
 DIM SHARED symbols(100) AS symbol
 DIM SHARED outp AS symbol
 DIM SHARED vars(100) AS vars
+
+DIM SHARED nl AS STRING * 1
+nl = CHR$(10)
 
 CLS
 PRINT "Loading file..."
@@ -238,6 +242,7 @@ FUNCTION preprocess$ (program AS STRING)
 END FUNCTION
 
 SUB run.mod (module$, args() AS symbol)
+    IF ASC(module$) = ASC("$") THEN run.mod.sub MID$(module$, 2), args()
     SELECT CASE module$
         CASE "if": mod.if args()
 
@@ -259,14 +264,37 @@ SUB run.mod (module$, args() AS symbol)
     END SELECT
 END SUB
 
+SUB run.mod.sub (subname$, args() AS symbol)
+    FOR i% = 0 TO UBOUND(symbols)
+        IF symbols(i%).name = subname$ GOTO runsub
+    NEXT
+    PRINT "ERROR> run.mod.sub: Cannot locate subroutine '"; subname$; "'"
+            
+runsub:
+    s% = i%
+    i% = 0
+    DO
+        SELECT CASE args(i%).type
+            CASE "#"
+                outp.outp = outp.outp + " PUSH #" + LTRIM$(STR$(args(i%).value))
+
+            CASE "*"
+
+            CASE "%"
+                outp.outp = outp.outp + " PUSH" + STR$(args(i%).value)
+
+            CASE ELSE
+                PRINT "ERROR> run.mod.sub: Cannot use type '"; args(i%).type; "' in a sub/function"
+        END SELECT
+    LOOP
+
+END SUB
+
 SUB run.sym (code$)
     outp.type = LEFT$(code$, 1)
     symname$ = MID$(code$, 2)
 
     SELECT CASE outp.type
-        CASE "$"
-            'run.mod.sub symname$
-
         CASE "#"
             IF LEN(symname$) = 0 THEN PRINT "ERROR> run.sym: Lonely #. Maybe you should give it some friends.": EXIT SUB
             SELECT CASE ASC(symname$)

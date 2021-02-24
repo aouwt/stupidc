@@ -2,28 +2,26 @@
 Stupid programming language that vaguely resembles C and compiles directly to 6502 assembly
 
 ## compiling
-compile (or interpret) with [QB64](https://github.com/QB64Team/qb64) or QB 7.1 (probably will be able to compile on other versions of MS QB, but I haven't tested it yet.)
+use your choice of QuickBasic compiler/interpreter to run. note that it ***cannot*** run in QB64.
 
 ## sample program
 parser doesnt work yet but this is what a Hello World should look like (so far)
 
 ### hello world
 ```stupidc
-system(&BE_6502);
-include(&lcd);
+system(#"BE6502.SCS");
+include(#"LCD.SC");
 
 reset({
   $lcd.init(:lcd.init.2l);
-  $lcd.print(:hworld);
+  $lcd.print(#"Hello, world!");
 });
-
-data(:hworld, #"Hello, world!");
 ```
 
 #### hello world but more annoying
 ```stupidc
-system(&BE_6502);
-include(&lcd);
+system(#"BE6502.SCS");
+include(#"LCD.SC");
 def(%i);
 
 reset({
@@ -31,18 +29,16 @@ reset({
   set(%1,0);
 
   while(%i,{
-    $lcd.print(:hworld);
+    $lcd.print(#"Hello, world!");
     inc(%i);
   });
 });
-
-data(:hworld, #"Hello, world!");
 ```
 
 ### learn how to count with stupidc!
 ```stupidc
-system(&BE_6502);
-include(&lcd);
+system(#"BE6502.SCS");
+include(#"LCD.SC");
 def(%i);
 
 reset({
@@ -58,33 +54,29 @@ reset({
 
 ### interrupt handling demo
 ```stupidc
-system(&BE_6502);
-include(&lcd);
+system(#"BE6502.SCS");
+include(#"LCD.SC");
 
 reset({
   $lcd.init(:lcd.init.2l);
-  $lcd.print(:reset);
+  $lcd.print(#"Reset");
 )};
 
 irq({
   $lcd.init(:lcd.init.2l);
-  $lcd.print(:irq);
+  $lcd.print(#"IRQ");
 )};
 
 nmi({
   $lcd.init(:lcd.init.2l);
-  $lcd.print(:nmi);
+  $lcd.print(#"NMI");
 });
-
-data(:reset, #"Reset");
-data(:irq, #"IRQ");
-data(:nmi, #"NMI");
 ```
 
 ### h
 ```stupidc
-system(&BE_6502);
-include(&lcd);
+system(#"BE6502.SCS");
+include(#"LCD.SC");
 
 reset({
   $lcd.init(:lcd.init.2l);
