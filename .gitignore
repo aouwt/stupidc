@@ -1,0 +1,14 @@
+# PWB .MAK and .BAK files
+*.MAK
+*.BAK
+
+# QB Binary files
+*.BIN
+
+# Compiled executables
+STUPIDC.EXE
+STUPIDC.DLL
+
+# Output files
+OUTPUT.ASM
+OUTPUT.ROM
