@@ -2,6 +2,12 @@
 *.MAK
 *.BAK
 
+# IDE Config files
+CURRENT.STS
+QBX.INI
+
+QBX/
+
 # QB Binary files
 *.BIN
 
@@ -12,3 +18,6 @@ STUPIDC.DLL
 # Output files
 OUTPUT.ASM
 OUTPUT.ROM
+
+# Logfile
+LOG.TXT

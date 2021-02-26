@@ -1,262 +1,398 @@
-DECLARE SUB mod.include (args() AS ANY)
-DECLARE SUB os.free (h AS INTEGER)
-DECLARE FUNCTION os.reserve% ()
-'$INCLUDE: 'A:\GLOBAL.BAS'
+DECLARE SUB Run.SR (SubName$, Args() AS ANY)
+DECLARE SUB test ()
+DECLARE FUNCTION AddLabel$ ()
+DECLARE FUNCTION AddSymbol& (Symbol AS ANY)
+DECLARE FUNCTION FILEEXISTS% (Filename$)
+DECLARE FUNCTION LOADFILE$ (Filename$)
+DECLARE SUB LogP (t$)
+DECLARE SUB Mod.Asm (Args() AS ANY)
+DECLARE SUB Mod.Def (Args() AS ANY)
+DECLARE SUB Mod.Halt (Args() AS ANY)
+DECLARE SUB Mod.If (Args() AS ANY)
+DECLARE SUB Mod.Include (Args() AS ANY)
+DECLARE SUB Mod.Sub (Args() AS ANY)
+DECLARE SUB Mod.System (Args() AS ANY)
+DECLARE SUB Parse (Pgm AS STRING)
+DECLARE FUNCTION Postprocess$ (c$)
+DECLARE FUNCTION Preprocess$ (Program AS STRING)
+DECLARE SUB Run.Mod (Module$, Args() AS ANY)
+DECLARE SUB Run.Sym (Code$)
+DECLARE SUB S.Init ()
+DECLARE FUNCTION S.Reserve% ()
+DECLARE FUNCTION SCS.GetNumKey! (Key$)
+DECLARE FUNCTION SCS.GetStrKey$ (Key$)
+DECLARE SUB SCS.Load (Filename$)
+DECLARE SUB Func.Pull (Args() AS ANY)
+DECLARE SUB Run.Func (Funcname$)
 
-DIM SHARED blanksymbol AS symbol
-DIM SHARED symbols(100) AS symbol
-DIM SHARED outp AS symbol
-DIM SHARED vars(100) AS vars
-DIM SHARED os(100) AS STRING
 
-DIM SHARED nl AS STRING * 1
-nl = CHR$(10)
 
-CLS
-PRINT ">>>> Loading file..."
-a$ = loadfile$("A:\SAMPLE.SC")
+TYPE Symbol
+  Name AS STRING * 16
+  type AS STRING * 1
+  Value AS INTEGER
+  Return AS STRING * 2
+  Outp AS INTEGER 'Location in the S() array. QB can't use variable-length strings in UDTs, for some reason.
+END TYPE
 
-PRINT ">>>> Running stage 1..."
-b$ = preprocess$(a$)
+TYPE Vars
+  Name AS STRING * 16
+  Address AS INTEGER
+END TYPE
 
-PRINT ">>>> Running stage 2..."
-parse b$
+TYPE SCSStringKey
+  Key AS STRING * 16
+  Value AS STRING * 64
+END TYPE
 
-PRINT ">>>> Compilation finished."
-PRINT asmoutput$
+TYPE SCSNumberKey
+  Key AS STRING * 16
+  Value AS SINGLE
+END TYPE
 
-FUNCTION addlabel$ STATIC
-  labels& = labels& + 1
-  IF labels& = 0 THEN PRINT "ERROR> addlabel: too many labels! this may create problems with the assembler."
-  addlabel$ = LTRIM$(RTRIM$(STR$(labels&)))
+TYPE SCS
+  S(32) AS SCSStringKey
+  N(32) AS SCSNumberKey
+END TYPE
+
+CONST LogFilename = "A:\LOG.TXT"
+
+DIM SHARED Blanksymbol AS Symbol
+DIM SHARED Symbols(100) AS Symbol
+DIM SHARED Outp AS Symbol
+DIM SHARED Vars(100) AS Vars
+DIM SHARED S(100) AS STRING
+
+DIM SHARED logfile AS INTEGER
+DIM SHARED LaunchTime AS DOUBLE
+LaunchTime = TIMER
+
+DIM SHARED NL AS STRING * 1
+NL = CHR$(13)
+
+logfile = FREEFILE
+OPEN LogFilename FOR APPEND AS #logfile
+PRINT #logfile, ""
+PRINT #logfile, "#### stupidc compiler v1 ####"
+PRINT #logfile, "(c)2021 all-other-usernames-were-taken"
+PRINT #logfile, "launched on: "; DATE$; "@"; TIME$
+PRINT #logfile, "with: "; COMMAND$
+PRINT #logfile, ""
+
+
+test
+
+FUNCTION AddLabel$ STATIC
+  Labels& = Labels& + 1
+
+  IF Labels& = 0 THEN LogP "ERROR> AddLabel: too many labels! this may create problems with the assembler."
+
+  AddLabel$ = LTRIM$(RTRIM$(STR$(Labels&)))
 END FUNCTION
 
-FUNCTION addsymbol& (symbol AS symbol)
-  DO: i& = i& + 1: LOOP UNTIL (ASC(symbols(i&).name) = 32) OR (i& >= UBOUND(symbols))
-  IF i& >= UBOUND(symbols) THEN PRINT "ERROR> addsymbol: Out of space for symbol '"; symbol.name; "'": EXIT FUNCTION
-  symbols(i&) = symbol
-  addsymbol& = i&
+FUNCTION AddSymbol& (Symbol AS Symbol)
+  DO
+    i& = i& + 1
+  LOOP UNTIL (ASC(Symbols(i&).Name) = 32) OR (i& >= UBOUND(Symbols))
+
+  IF i& >= UBOUND(Symbols) THEN LogP "ERROR> AddSymbol: Out of space for symbol '" + Symbol.Name + "'": EXIT FUNCTION
+
+  Symbols(i&) = Symbol
+  AddSymbol& = i&
 END FUNCTION
 
-SUB debug.dumpkeys
-  SHARED keys AS scs
+SUB Debug.DumpKeys
+  SHARED Keys AS SCS
 
   PRINT "keys.s:"
-  FOR i% = 0 TO UBOUND(keys.s)
-    IF ASC(keys.s(i%).key) THEN PRINT "key:"; keys.s(i%).key; " value:"; RTRIM$(keys.s(i%).value)
+  FOR i% = 0 TO UBOUND(Keys.S)
+    IF ASC(Keys.S(i%).Key) THEN PRINT Keys.S(i%).Key; "="; RTRIM$(Keys.S(i%).Value)
   NEXT
+
 
   PRINT : PRINT "keys.n:"
-  FOR i% = 0 TO UBOUND(keys.n)
-    IF ASC(keys.n(i%).key) THEN PRINT "key:"; keys.n(i%).key; " value:"; keys.n(i%).value
+
+  FOR i% = 0 TO UBOUND(Keys.N)
+    IF ASC(Keys.N(i%).Key) THEN PRINT Keys.N(i%).Key; "="; Keys.N(i%).Value
   NEXT
 END SUB
 
-SUB debug.dumpos
-  PRINT "os:"
-  FOR i% = 0 TO UBOUND(os)
-    PRINT LEFT$(os(i%), 10);
+SUB Debug.DumpS
+  PRINT "S:"
+  FOR i% = 0 TO UBOUND(S)
+    PRINT LEFT$(S(i%), 10);
   NEXT
 END SUB
 
-FUNCTION loadfile$ (filename$)
-  f% = FREEFILE
-  OPEN filename$ FOR BINARY AS #f%
-  DIM c AS STRING * 1
-  DO
-    GET #f%, , c
-    s$ = s$ + c
-  LOOP UNTIL EOF(f%)
-  loadfile$ = s$
-  CLOSE #f%
-  EXIT FUNCTION
+FUNCTION FILEEXISTS% (Filename$)
+  F% = FREEFILE
+ 
+  OPEN Filename$ FOR APPEND AS #F%
+
+  FILEEXISTS% = LOF(F%)
+  IF LOF(F%) = 0 THEN KILL Filename$
+
+  CLOSE #F%
 END FUNCTION
 
-SUB mod.asm (args() AS symbol)
-  os(outp.outp) = os(args(0).outp)
+SUB Func.Or (Args() AS Symbol)
+  
 END SUB
 
-SUB mod.def (args() AS symbol)
-  DO: i& = i& + 1: LOOP UNTIL (ASC(vars(i&).name) = 32) OR (i& >= UBOUND(vars))
-  IF i& > UBOUND(vars) THEN PRINT "ERROR> mod.def: Out of variable space for variable '"; args(0).name; "'"
-  vars(i&).name = args(0).name
-  vars(i&).address = vars(i& - 1).address + 1
-  os(outp.outp) = ""
+SUB Func.Pull (Args() AS Symbol)
+  S(Outp.Outp) = "FS_PULL"
 END SUB
 
-SUB mod.halt (args() AS symbol)
-  os(outp.outp) = " JMP *"
+FUNCTION LOADFILE$ (Filename$)
+  F% = FREEFILE
+  OPEN Filename$ FOR BINARY AS #F%
+
+  DIM c AS STRING * 1
+  DO
+
+    GET #F%, , c
+    S$ = S$ + c
+
+  LOOP UNTIL EOF(F%)
+
+  LOADFILE$ = S$
+
+  CLOSE #F%
+END FUNCTION
+
+SUB LogP (t$)
+
+  CONST Color.Info = 15
+  CONST Color.MoreInfo = 7
+  CONST Color.Error = 4
+  CONST Color.Warning = 5
+  CONST Color.FatalError = 12
+
+
+  IF ASC(t$) = 32 THEN COLOR Color.MoreInfo: GOTO LogP.Print
+
+  b% = INSTR(t$, ">")
+  'IF b% = 0 THEN logp "ERROR> LogP: Cannot evaluate type of message '" + t$ + "'": EXIT SUB
+
+  SELECT CASE LEFT$(t$, b% - 1)
+    CASE "ERROR"
+      COLOR Color.Error
+
+    CASE "FATAL"
+      COLOR Color.FatalError
+
+    CASE "INFO"
+      COLOR Color.Info
+
+    CASE "WARN"
+      COLOR Color.Warning
+
+    CASE ELSE
+      COLOR 7
+  END SELECT
+
+LogP.Print:
+  PRINT t$
+  PRINT #logfile, USING "(####.##) &"; TIMER - LaunchTime; t$
+
 END SUB
 
-SUB mod.if (args() AS symbol)
-  label$ = addlabel
-  IF args(0).type = "?" THEN
-      SELECT CASE args(0).return
+SUB Mod.Asm (Args() AS Symbol)
+  S(Outp.Outp) = S(Args(0).Outp)
+END SUB
+
+SUB Mod.Def (Args() AS Symbol)
+  DO
+    i& = i& + 1
+  LOOP UNTIL (ASC(Vars(i&).Name) = 32) OR (i& >= UBOUND(Vars))
+
+  IF i& > UBOUND(Vars) THEN LogP "ERROR> mod.Def: Out of variable space for variable '" + Args(0).Name + "'"
+
+  Vars(i&).Name = Args(0).Name
+  Vars(i&).Address = Vars(i& - 1).Address + 1
+  S(Outp.Outp) = ""
+END SUB
+
+SUB Mod.Halt (Args() AS Symbol)
+  S(Outp.Outp) = " JMP *"
+END SUB
+
+SUB Mod.If (Args() AS Symbol)
+  Label$ = AddLabel
+  IF Args(0).type = "?" THEN
+
+      SELECT CASE Args(0).Return
         CASE "+Z"
-          os(outp.outp) = os(args(0).outp) + " BNE " + label$ + os(args(1).outp) + label$ + ":"
+          S(Outp.Outp) = S(Args(0).Outp) + " BNE " + Label$ + S(Args(1).Outp) + Label$ + ":"
 
         CASE "-Z"
-          os(outp.outp) = os(args(0).outp) + " BEQ " + label$ + os(args(1).outp) + label$ + ":"
+          S(Outp.Outp) = S(Args(0).Outp) + " BEQ " + Label$ + S(Args(1).Outp) + Label$ + ":"
 
         CASE "+C"
-          os(outp.outp) = os(args(0).outp) + " BCC " + label$ + os(args(1).outp) + label$ + ":"
+          S(Outp.Outp) = S(Args(0).Outp) + " BCC " + Label$ + S(Args(1).Outp) + Label$ + ":"
 
         CASE "-C"
-          os(outp.outp) = os(args(0).outp) + " BCS " + label$ + os(args(1).outp) + label$ + ":"
+          S(Outp.Outp) = S(Args(0).Outp) + " BCS " + Label$ + S(Args(1).Outp) + Label$ + ":"
 
       END SELECT
 
     ELSE
-      os(outp.outp) = os(args(0).outp) + " BNE " + label$ + os(args(1).outp) + label$ + ":"
+      S(Outp.Outp) = S(Args(0).Outp) + " BNE " + Label$ + S(Args(1).Outp) + Label$ + ":"
   END IF
 END SUB
 
-SUB mod.include (args() AS symbol)
-  IF args(0).type <> CHR$(34) THEN
-    PRINT "ERROR> mod.include: Cannot accept type '"; args(0).type; "'"
+SUB Mod.Include (Args() AS Symbol)
+  IF Args(0).type <> CHR$(34) THEN
+    LogP "ERROR> mod.Include: Cannot accept type '" + Args(0).type + "'"
     EXIT SUB
   END IF
 
-  PRINT "INFO> mod.include: Loading file '"; os(args(0).outp); "'"
-  os(outp.outp) = ""
-  a$ = loadfile$(os(args(0).outp))
-  parse a$
-  PRINT "INFO> mod.include: Exiting include '"; os(args(0).outp); "'"
+  LogP "INFO> mod.Include: Loading file '" + S(Args(0).Outp) + "'"
+  S(Outp.Outp) = ""
+  a$ = LOADFILE$(S(Args(0).Outp))
+  Parse a$
+  LogP "INFO> mod.Include: Exiting include '" + S(Args(0).Outp) + "'"
 END SUB
 
-SUB mod.sub (args() AS symbol)
-  lbl$ = addlabel
-  os(args(2).outp) = lbl$
-  args(2).type = "$"
-  args(2).name = "$" + os(args(0).outp)
-  sr& = addsymbol(args(2))
-  os(outp.outp) = lbl$ + ":" + os(args(1).outp) + " RTS"
+SUB Mod.Sub (Args() AS Symbol)
+  lbl$ = AddLabel
+  S(Args(2).Outp) = lbl$
+  Args(2).type = "$"
+  Args(2).Name = "$" + S(Args(0).Outp)
+  sr& = AddSymbol(Args(2))
+  S(Outp.Outp) = lbl$ + ":" + S(Args(1).Outp) + " RTS"
 END SUB
 
-SUB mod.system (args() AS symbol)
-  IF args(0).type <> CHR$(34) THEN
-    PRINT "ERROR> mod.system: Cannot use type '"; args(0).type; "'"
+SUB Mod.System (Args() AS Symbol)
+  IF Args(0).type <> CHR$(34) THEN
+    LogP "ERROR> mod.System: Cannot use type '" + Args(0).type + "'"
     EXIT SUB
   END IF
 
-  scs.load os(args(0).outp)
-  os(outp.outp) = ""
+  SCS.Load "A:\SYSTEMS\" + S(Args(0).Outp) + ".SCS"
+  S(Outp.Outp) = ""
 END SUB
 
-SUB os.free (h AS INTEGER)
-  os(h) = CHR$(255)
+SUB Mod.Undef (Args() AS Symbol)
+  DO
+    i& = i& + 1
+  LOOP UNTIL (Vars(i&).Name = Args(0).Name) OR (i& >= UBOUND(Vars))
+  
+  IF i& >= UBOUND(Vars) THEN LogP "ERROR> Mod.Undef: Variable '" + Args(0).Name + "' is not defined!": EXIT SUB
+  IF ASC(Vars(i& - 1).Name) <> 32 THEN LogP "WARN> Mod.Undef: Variable '" + Args(0).Name + "' is buried! undef-ing this variable can cause issues!"
+
+  Vars(i&).Name = ""
 END SUB
 
-SUB os.init
-  FOR i% = 0 TO UBOUND(os)
-    os(i%) = CHR$(255)
-  NEXT
-END SUB
+SUB Parse (Pgm AS STRING)
+  DIM Char AS STRING * 1, Args(16) AS Symbol
+  SHARED ASMOutput$
 
-FUNCTION os.reserve%
-  FOR i% = 0 TO UBOUND(os)
-    IF ASC(os(i%)) = 255 THEN
+  Outp.Outp = S.Reserve%
 
-      os.reserve% = i%
-      os(i%) = ""
-      EXIT FUNCTION
+  FOR i% = 1 TO LEN(Pgm)
+    Char = MID$(Pgm, i%, 1)
 
-    END IF
-  NEXT
+    SELECT CASE Char
+      CASE "(": Level% = Level% + 1
+        IF Level% = 1 THEN LastArg% = i% + 1: SymName$ = LEFT$(Pgm, i% - 1)
 
-  PRINT "ERROR> os.reserve: os() is full, cannot reserve new string space!"
-  os.reserve% = 0
-END FUNCTION
+      CASE ")": Level% = Level% - 1
 
-SUB parse (pgm AS STRING)
-  DIM char AS STRING * 1, args(16) AS symbol
-  SHARED asmoutput$
+      CASE "{": Level% = Level% + 1
 
-  FOR i% = 1 TO LEN(pgm)
-    char = MID$(pgm, i%, 1)
+      CASE "}": Level% = Level% - 1
 
-    SELECT CASE char
-      CASE "(": level% = level% + 1
-        IF level% = 1 THEN lastarg% = i% + 1: symname$ = LEFT$(pgm, i% - 1)
+      CASE ",": IF Level% = 1 THEN GOSUB Parse.RunArg
 
-      CASE ")": level% = level% - 1
-
-      CASE "{": level% = level% + 1
-
-      CASE "}": level% = level% - 1
-
-      CASE ","
-        IF level% = 1 THEN
-
-          'os.free args(currentarg%).outp
-          'os.free outp.outp
-          'outp.outp = os.reserve
-
-          run.sym MID$(pgm, lastarg%, (i% - lastarg%) - 1)
-          args(currentarg%) = outp
-
-          lastarg% = i% - 1
-          currentarg% = currentarg% + 1
-
-        END IF
-
-      CASE ";"
-        IF level% = 0 THEN GOSUB runcmd 'end of statement
+      CASE ";": IF Level% = 0 THEN GOSUB Parse.RunCmd'end of statement
 
     END SELECT
-    IF level% = -1 THEN EXIT FOR
+    IF Level% = -1 THEN EXIT FOR
   NEXT
   EXIT SUB
 
-runcmd:
-    os.free args(currentarg%).outp
-    args(currentarg%).outp = os.reserve
-    run.sym MID$(pgm, lastarg%, (i% - lastarg%) - 1)'Final argument
-    args(currentarg%) = outp
-    lastarg% = i% - 1
 
-    run.mod symname$, args()
-    asmoutput$ = asmoutput$ + os(outp.outp)
-    os(outp.outp) = ""
 
-    symname$ = ""
-    'ERASE args
-    currentarg% = 0
-    pgm = MID$(pgm, i% + 1)
+Parse.RunCmd:
+    GOSUB Parse.RunArg
+
+    Run.Mod SymName$, Args()
+    ASMOutput$ = ASMOutput$ + S(Outp.Outp) + NL
+
+    Pgm = MID$(Pgm, i% + 1)
+
+    SymName$ = ""
+    CurrentArg% = 0
     i% = 1
+
+  RETURN
+
+
+
+Parse.RunArg:
+    Run.Sym MID$(Pgm, LastArg%, (i% - LastArg%) - 1)
+    Args(CurrentArg%) = Outp
+
+    LastArg% = i% - 1
+    CurrentArg% = CurrentArg% + 1
 
   RETURN
 END SUB
 
-FUNCTION postprocess$ (c$)
-
+FUNCTION Postprocess$ (c$)
+  LogP "WARN> Postprocess: Skipping (not supported)"
+  Postprocess$ = c$
+'  DO
+'Postprocess.Next:
+'
+'    PastBase$ = Base$
+'
+'    b% = a% + 1
+'    a% = INSTR(b%, c$, nl)
+'
+'    IF a% = 0 THEN EXIT DO
+'
+'    ln$ = RTRIM$(MID$(c$, b%, a% - b%)) 'Can't LTRIM it 'cause we need the indents
+'    LTLn$ = LTRIM$(ln$)
+'    i% = INSTR(LTLn$, " ")
+'    IF i% THEN Base$ = LEFT$(ln$, i% - 1) ELSE Base$ = LTLn$
+'
+'    IF LTLn$ = "" THEN
+'      GOTO preprocess.next
+'
+'    elseif Pas
+'
+'
+'
+'  LOOP
 END FUNCTION
 
-FUNCTION preprocess$ (program AS STRING)
+FUNCTION Preprocess$ (Program AS STRING)
   DIM c AS STRING * 1 ', n AS STRING * 1
 
-  FOR i& = 1 TO LEN(program)
-    c = MID$(program, i&, 1)
+  FOR i& = 1 TO LEN(Program)
+    c = MID$(Program, i&, 1)
     SELECT CASE ASC(c)
 
       CASE 34
-        i2& = INSTR(i& + 1, program, c)
+        i2& = INSTR(i& + 1, Program, c)
         IF i2& = 0 THEN
-            PRINT "ERROR> preprocess: could not find closing quotation!"
-            PRINT MID$(program, i& - 10, 10)
-            PRINT SPACE$(9); "^"
+            LogP "ERROR> Preprocess: could not find closing quotation!"
+            LogP " " + MID$(Program, i& - 10, 10)
+            LogP SPACE$(10) + "^"
           ELSE 'im just gonna ignore that
-            o$ = o$ + MID$(program, i&, i2& - i& + 1)
+            o$ = o$ + MID$(Program, i&, i2& - i& + 1)
             i& = i2&
         END IF
 
       CASE ASC("<")
-        i2& = INSTR(i& + 1, program, ">")
+        i2& = INSTR(i& + 1, Program, ">")
         IF i2& = 0 THEN
 
-          PRINT "ERROR> preprocess: could not find close of comment!"
-          PRINT MID$(program, i& - 10, 10)
-          PRINT SPACE$(9); "^"
+          LogP "ERROR> Preprocess: could not find close of comment!"
+          LogP " " + MID$(Program, i& - 10, 10)
+          LogP SPACE$(10) + "^"
 
           ELSE i& = i2&
         END IF
@@ -266,58 +402,67 @@ FUNCTION preprocess$ (program AS STRING)
     END SELECT
   NEXT
 
-  preprocess$ = o$
+  Preprocess$ = o$
 END FUNCTION
 
-SUB run.mod (module$, args() AS symbol)
-  IF ASC(module$) = ASC("$") THEN run.mod.sub MID$(module$, 2), args()
-  PRINT module$
-  SELECT CASE module$
-    CASE "if": mod.if args()
+SUB Run.Func (Funcname$)
+  SELECT CASE Funcname$
 
-    'CASE "while": mod.while args()
+    CASE "pull"
+      'Func.Pull args()
 
-    CASE "sub": mod.sub args()
-
-    'CASE "func": mod.func args()
-                
-    CASE "def": mod.def args()
-
-    CASE "asm": mod.asm args()
-
-    CASE "halt": mod.halt args()
-
-    CASE "system": mod.system args()
-
-    CASE "include": mod.include args()
-
-    CASE ELSE: PRINT "ERROR> run.mod: invalid module '"; module$; "'"
   END SELECT
 END SUB
 
-SUB run.mod.sub (subname$, args() AS symbol)
-  FOR i% = 0 TO UBOUND(symbols)
+SUB Run.Mod (Module$, Args() AS Symbol)
+  IF ASC(Module$) = ASC("$") THEN Run.SR MID$(Module$, 2), Args()
+  'LogP module$
+  SELECT CASE Module$
+    CASE "if": Mod.If Args()
 
-    IF symbols(i%).name = subname$ GOTO runsub
+    'CASE "while": mod.While args()
+
+    CASE "sub": Mod.Sub Args()
+
+    'CASE "func": mod.Func args()
+                
+    CASE "def": Mod.Def Args()
+
+    CASE "asm": Mod.Asm Args()
+
+    CASE "halt": Mod.Halt Args()
+
+    CASE "system": Mod.System Args()
+
+    CASE "include", "lib"': Mod.Include args()
+
+    CASE ELSE: LogP "ERROR> Run.Mod: invalid module '" + Module$ + "'"
+  END SELECT
+END SUB
+
+SUB Run.SR (SubName$, Args() AS Symbol)
+  FOR i% = 0 TO UBOUND(Symbols)
+
+    IF Symbols(i%).Name = SubName$ GOTO Run.SR.RunSub
     
   NEXT
-  PRINT "ERROR> run.mod.sub: Cannot locate subroutine '"; subname$; "'"
+  LogP "ERROR> Run.Mod.Sub: Cannot locate subroutine '" + SubName$ + "'"
                         
-runsub:
-  s% = i%
+Run.SR.RunSub:
+  'S% = i%
   i% = 0
   DO
-    SELECT CASE ASC(args(i%).type)
+    SELECT CASE ASC(Args(i%).type)
       CASE ASC("#")
-        os(outp.outp) = os(outp.outp) + " PUSH #" + LTRIM$(STR$(args(i%).value))
+        S(Outp.Outp) = S(Outp.Outp) + " PUSH #" + LTRIM$(STR$(Args(i%).Value))
 
       CASE ASC("*")
 
       CASE ASC("%")
-        os(outp.outp) = os(outp.outp) + " PUSH" + STR$(args(i%).value)
+        S(Outp.Outp) = S(Outp.Outp) + " PUSH" + STR$(Args(i%).Value)
 
       CASE ELSE
-        PRINT "ERROR> run.mod.sub: Cannot use type '"; args(i%).type; "' in a sub/function"
+        LogP "ERROR> Run.Mod.Sub: Cannot use type '" + Args(i%).type + "' in a sub/function"
         EXIT DO
     END SELECT
     i% = i% + 1
@@ -325,48 +470,49 @@ runsub:
 
 END SUB
 
-SUB run.sym (code$)
-  outp.type = LEFT$(code$, 1)
-  symname$ = MID$(code$, 2)
+SUB Run.Sym (Code$)
+  Outp.type = LEFT$(Code$, 1)
+  SymName$ = MID$(Code$, 2)
 
-  SELECT CASE outp.type
+  SELECT CASE Outp.type
     CASE "#"
-      IF LEN(symname$) = 0 THEN PRINT "ERROR> run.sym: Lonely #. Maybe you should give it some friends.": EXIT SUB
+      IF LEN(SymName$) = 0 THEN LogP "ERROR> Run.Sym: Lonely #. Maybe you should give it some friends.": EXIT SUB
 
-        SELECT CASE ASC(symname$)
+        SELECT CASE ASC(SymName$)
           CASE ASC("$")
-            outp.value = VAL("&H" + MID$(symname$, 2))
+            Outp.Value = VAL("&H" + MID$(SymName$, 2))
 
           CASE ASC("%")
-            outp.value = VAL("&B" + MID$(symname$, 2))
+            Outp.Value = VAL("&B" + MID$(SymName$, 2))
 
           CASE ASC("&")
-            outp.value = VAL("&O" + MID$(symname$, 2))
+            Outp.Value = VAL("&O" + MID$(SymName$, 2))
 
           CASE 34
-            outp.type = CHR$(34)
-            os(outp.outp) = MID$(symname$, 2, LEN(symname$) - 2)
+            Outp.type = CHR$(34)
+            S(Outp.Outp) = MID$(SymName$, 2, LEN(SymName$) - 2)
                           
           CASE ELSE
-            IF LTRIM$(RTRIM$(STR$(VAL(symname$)))) = symname$ THEN
-                outp.value = VAL(symname$)
+            IF LTRIM$(RTRIM$(STR$(VAL(SymName$)))) = SymName$ THEN
+                Outp.Value = VAL(SymName$)
               ELSE
-                PRINT "ERROR> run.sym: '#"; symname$; "' when expected decimal number"
+                LogP "ERROR> Run.Sym: '#" + SymName$ + "' when expected decimal number"
             END IF
 
         END SELECT
 
       CASE "*"
-        'run.mod.func symname$
+        'Run.SR.Func symname$
 
       CASE "?"
-        'run.bool symname$
+        'Run.Bool symname$
 
       CASE "%"
-        FOR i% = 0 TO UBOUND(vars)
-          IF vars(i%).name = symname$ THEN
-            os(outp.outp) = LTRIM$(RTRIM$(STR$(vars(i%).address)))
-            outp.name = symname$
+        FOR i% = 0 TO UBOUND(Vars)
+          IF Vars(i%).Name = SymName$ THEN
+
+            S(Outp.Outp) = LTRIM$(RTRIM$(STR$(Vars(i%).Address)))
+            Outp.Name = SymName$
             EXIT FOR
 
           END IF
@@ -374,122 +520,186 @@ SUB run.sym (code$)
 
 
       CASE "{"
-        parse symname$
+        Parse SymName$
 
       CASE "&"
-        os(outp.outp) = symname$
-        outp.type = "&"
+        S(Outp.Outp) = SymName$
+        Outp.type = "&"
+
+      CASE "."
+        Run.Func SymName$
 
       CASE ELSE
-        PRINT "ERROR> run.sym: cannot determine type of symbol '"; outp.type; symname$; "'"
+        LogP "ERROR> Run.Sym: cannot determine type of symbol '" + Outp.type + SymName$ + "'"
 
     END SELECT
 END SUB
 
-FUNCTION scs.getNumKey! (key$)
-  SHARED keys AS scs
+SUB S.Free (h AS INTEGER)
+  IF S(h) = "" THEN LogP "WARN> S.Free: 'S(" + STR$(h) + ")' is not initialized"
+  S(h) = CHR$(255)
+END SUB
 
-  FOR i% = 0 TO UBOUND(keys.n)
-    IF RTRIM$(keys.n(i%).key) = key$ THEN
+SUB S.Init
+  FOR i% = 0 TO UBOUND(S)
+    S(i%) = CHR$(255)
+  NEXT
+END SUB
 
-      scs.getNumKey! = keys.n(i%).value
+FUNCTION S.Reserve%
+  FOR i% = 0 TO UBOUND(S)
+
+    IF S(i%) = "" GOTO S.Reserve.Next
+
+    IF ASC(S(i%)) = 255 THEN
+
+      S.Reserve% = i%
+      S(i%) = ""
+      EXIT FUNCTION
+
+    END IF
+
+S.Reserve.Next:
+  NEXT
+
+  LogP "ERROR> S.Reserve: s() is full, cannot reserve new string space!"
+  S.Reserve% = 0
+END FUNCTION
+
+FUNCTION SCS.GetNumKey! (Key$)
+  SHARED Keys AS SCS
+
+  FOR i% = 0 TO UBOUND(Keys.N)
+    IF RTRIM$(Keys.N(i%).Key) = Key$ THEN
+
+      SCS.GetNumKey! = Keys.N(i%).Value
       EXIT FOR
 
     END IF
   NEXT
-  IF i% = UBOUND(keys.n) THEN PRINT "ERROR> scs.getNumKey!: Key '"; key$; "' not found!"
+  IF i% = UBOUND(Keys.N) THEN LogP "ERROR> SCS.GetNumKey: Key '" + Key$ + "' not found!"
 END FUNCTION
 
-FUNCTION scs.getStrKey$ (key$)
-  SHARED keys AS scs
+FUNCTION SCS.GetStrKey$ (Key$)
+  SHARED Keys AS SCS
 
-  FOR i% = 0 TO UBOUND(keys.s)
-    IF RTRIM$(keys.s(i%).key) = key$ THEN
+  FOR i% = 0 TO UBOUND(Keys.S)
+    IF RTRIM$(Keys.S(i%).Key) = Key$ THEN
 
-      scs.getStrKey$ = keys.s(i%).value
+      SCS.GetStrKey$ = Keys.S(i%).Value
       EXIT FOR
 
     END IF
   NEXT
-  IF i% = UBOUND(keys.s) THEN PRINT "ERROR> scs.getStrKey$: Key '"; key$; "' not found!"
+  IF i% = UBOUND(Keys.S) THEN LogP "ERROR> SCS.GetStrKey$: Key '" + Key$ + "' not found!"
 END FUNCTION
 
-SUB scs.load (filename$)
-  SHARED keys AS scs
-  ERASE keys.s, keys.n
+SUB SCS.Load (Filename$)
+  SHARED Keys AS SCS
 
-  f% = FREEFILE
-  PRINT "INFO> scs.load: Loading SCS file '"; filename$; "'"
-  OPEN filename$ FOR INPUT AS #f%
+
+
+  ERASE Keys.S, Keys.N
+
+  F% = FREEFILE
+  LogP "INFO> SCS.Load: Loading SCS file '" + Filename$ + "'"
+  IF FILEEXISTS(Filename$) = 0 THEN LogP "ERROR> SCS.Load: File not found!": EXIT SUB
+  OPEN Filename$ FOR INPUT AS #F%
 
   DO
-    LINE INPUT #f%, ln$
+    LINE INPUT #F%, ln$
     ln$ = LTRIM$(RTRIM$(ln$))
 
     i% = INSTR(ln$, " ")
-    IF i% = 0 THEN GOTO nextline
+    IF i% = 0 THEN GOTO SCS.Load.Next
 
-    key$ = LTRIM$(RTRIM$(MID$(ln$, 2, i% - 2)))
-    val$ = LTRIM$(RTRIM$(MID$(ln$, i% + 1)))
+    Key$ = LTRIM$(RTRIM$(MID$(ln$, 2, i% - 2)))
+    Val$ = LTRIM$(RTRIM$(MID$(ln$, i% + 1)))
                 
-    IF UCASE$(val$) = "TRUE" THEN val$ = "-1"
-    IF UCASE$(val$) = "FALSE" THEN val$ = "0"
+    IF UCASE$(Val$) = "TRUE" THEN Val$ = "-1"
+    IF UCASE$(Val$) = "FALSE" THEN Val$ = "0"
 
     SELECT CASE ASC(ln$)
       CASE ASC("#")
         'Ignore it
 
       CASE ASC("=")
-        FOR i% = 0 TO UBOUND(keys.n)
-          IF ASC(keys.n(i%).key) = 0 THEN
+        FOR i% = 0 TO UBOUND(Keys.N)
+          IF ASC(Keys.N(i%).Key) = 0 THEN
 
-            keys.n(i%).key = UCASE$(key$)
-            keys.n(i%).value = VAL(val$)
+            Keys.N(i%).Key = UCASE$(Key$)
+            Keys.N(i%).Value = VAL(Val$)
             EXIT FOR
 
           END IF
         NEXT
-        IF i% = UBOUND(keys.n) THEN PRINT "ERROR> loadscs: Out of space for number key '"; key$; "'!"
+        IF i% = UBOUND(Keys.N) THEN LogP "ERROR> SCS.Load: Out of space for number key '" + Key$ + "'!"
 
       CASE ASC("$")
-        FOR i% = 0 TO UBOUND(keys.s)
-          IF ASC(keys.s(i%).key) = 0 THEN
+        FOR i% = 0 TO UBOUND(Keys.S)
+          IF ASC(Keys.S(i%).Key) = 0 THEN
 
-            keys.s(i%).key = UCASE$(key$)
-            keys.s(i%).value = val$
+            Keys.S(i%).Key = UCASE$(Key$)
+            Keys.S(i%).Value = Val$
             EXIT FOR
             
           END IF
         NEXT
-        IF i% = UBOUND(keys.s) THEN PRINT "ERROR> loadscs: Out of space for string key '"; key$; "'!"
+        IF i% = UBOUND(Keys.S) THEN LogP "ERROR> SCS.Load: Out of space for string key '" + Key$ + "'!"
 
       CASE ASC("{")
         DO
 
-          LINE INPUT #f%, ln$
+          LINE INPUT #F%, ln$
           ln$ = LTRIM$(RTRIM$(ln$))
           IF ln$ = "}" THEN EXIT DO
-          val$ = val$ + ln$ + CHR$(10) + CHR$(13)
+          Val$ = Val$ + ln$ + CHR$(10) + CHR$(13)
 
-        LOOP UNTIL EOF(f%)
-        IF EOF(f%) THEN PRINT "WARN> loadscs: Unexpected EOF while reading multi-line key '"; key$; "'"
+        LOOP UNTIL EOF(F%)
+        IF EOF(F%) THEN LogP "WARN> SCS.Load: Unexpected EOF while reading multi-line key '" + Key$ + "'"
 
-        FOR i% = 0 TO UBOUND(keys.s)
-          IF ASC(keys.s(i%).key) = 0 THEN
+        FOR i% = 0 TO UBOUND(Keys.S)
+          IF ASC(Keys.S(i%).Key) = 0 THEN
 
-            keys.s(i%).key = UCASE$(key$)
-            keys.s(i%).value = val$
+            Keys.S(i%).Key = UCASE$(Key$)
+            Keys.S(i%).Value = Val$
             EXIT FOR
 
           END IF
         NEXT
-        IF i% = UBOUND(keys.s) THEN PRINT "ERROR> loadscs: Out of space for multi-line key '"; key$; "'!"
+        IF i% = UBOUND(Keys.S) THEN LogP "ERROR> SCS.Load: Out of space for multi-line key '" + Key$ + "'!"
                                                                                                                                                                                          
       CASE ELSE
-        PRINT "ERROR> loadscs: Unknown key type '"; ASC(ln$); "'"
+        LogP "ERROR> SCS.Load: Unknown key type '" + LEFT$(ln$, 1) + "'"
 
     END SELECT
-nextline:
-  LOOP UNTIL EOF(f%)
+SCS.Load.Next:
+  LOOP UNTIL EOF(F%)
+END SUB
+
+SUB test
+
+  CONST file = "A:\SAMPLES\GAME.SC"
+  CLS
+  LogP "INFO> Compiling file '" + file + "'"
+
+  S.Init
+
+  LogP "INFO> Loading file"
+  a$ = LOADFILE$(file)
+
+  LogP "INFO> Entering stage 1"
+  CHDIR "A:\"
+  b$ = Preprocess$(a$)
+
+  LogP "INFO> Entering stage 2"
+  Parse b$
+
+  LogP "INFO> Entering stage 3"
+  a$ = Postprocess$(b$)
+
+  LogP "INFO> Compilation finished."
+  PRINT ASMOutput$
+
 END SUB
 
