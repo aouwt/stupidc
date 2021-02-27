@@ -2,7 +2,7 @@
 Stupid programming language that vaguely resembles C and compiles directly to 6502 assembly
 
 ## compiling
-tested and works in QBX PDS ***only***. i could ***not*** get it to run in other versions including QB64, but i dont wanna port it
+tested and works in QBX PDS 7.1 and VBDOS (it probably can run in other earlier versions of VB but I havent tested it.) it ***cannot*** run in QBasic, QB45, or QB64 due to issues with UDTs.
 
 ## sample program
 parser doesnt work yet but this is what a Hello World should look like (so far)
@@ -12,8 +12,8 @@ parser doesnt work yet but this is what a Hello World should look like (so far)
 system(&BE6502);
 include(&LCD);
 
-reset({
-  $lcd.init(:lcd.init.2l);
+onreset({
+  $lcd.init(:lcd.c.2l);
   $lcd.print(#"Hello, world!");
 });
 ```
@@ -24,8 +24,8 @@ system(&BE6502);
 include(&LCD);
 def(%i);
 
-reset({
-  $lcd.init(:lcd.init.2l);
+onreset({
+  $lcd.init(:lcd.c.2l);
   set(%1,0);
 
   while(%i,{
@@ -41,13 +41,14 @@ system(&BE6502);
 include(&LCD);
 def(%i);
 
-reset({
-  $lcd.init(:lcd.init.2l);
+onreset({
+  $lcd.init(:lcd.c.2l);
   
   while(%i,{
     $lcd.print(*b2s(%i));
     inc(%i);
   )};
+  
 });
 
 ```
@@ -57,19 +58,29 @@ reset({
 system(&BE6502);
 include(&LCD);
 
-reset({
-  $lcd.init(:lcd.init.2l);
+onreset({
+  $lcd.init(:lcd.c.2l);
   $lcd.print(#"Reset");
 )};
 
-irq({
-  $lcd.init(:lcd.init.2l);
+onirq({
+  $lcd.init(:lcd.c.2l);
   $lcd.print(#"IRQ");
+  
+  $lcd.locate(:lcd.c.ln2);
+  $lcd.print(#"IRQ OFF");
+  
+  irq(&OFF);
 )};
 
-nmi({
-  $lcd.init(:lcd.init.2l);
+onnmi({
+  $lcd.init(:lcd.c.2l);
   $lcd.print(#"NMI");
+  
+  $lcd.locate(:lcd.c.ln2);
+  $lcd.print(#"IRQ ON");
+  
+  irq(&on);
 });
 ```
 
@@ -78,8 +89,8 @@ nmi({
 system(&BE6502);
 include(&LCD);
 
-reset({
-  $lcd.init(:lcd.init.2l);
+onreset({
+  $lcd.init(:lcd.c.2l);
 
   while(#1,{
     $lcd.print(#\`h);
