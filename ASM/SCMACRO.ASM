@@ -9,7 +9,7 @@
 
     MACRO S_PUSH ;Pushes to the fakestack
 
-        LDA {1}
+        ;LDA {1}
         LDX S_PTR
         STA S_START,x
         DEC S_PTR
@@ -39,9 +39,23 @@
 
     MACRO S_SET ;Sets the top item from the fakestack without incrementing
                     ;the stack pointer.
-        LDA {1}
+        ;LDA {1}
         LDX S_PTR
         STA S_START,x
+
+    ENDM
+
+
+   
+    MACRO CLEARMEM
+
+        LDX #0
+        LDA #0
+.Loop:
+         STA {1},x
+         INX
+         CPX {2}
+        BNE .Loop
 
     ENDM
 

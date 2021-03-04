@@ -1,3 +1,5 @@
+DECLARE SUB S.Free (h AS INTEGER)
+DECLARE SUB Run.Sub (SubName$, Args() AS ANY)
 DECLARE SUB Get.Sub (SubName$, Args() AS ANY)
 DECLARE SUB Mod.Asm (Args() AS ANY)
 DECLARE SUB Mod.Def (Args() AS ANY)
@@ -92,7 +94,7 @@ SUB Mod.Include (Args() AS Symbol)
 
   Parse Preprocess$(LOADFILE$("A:\STUPIDC\LIBS\" + S(Args(0).Outp) + ".SC"))
 
-  LogP "INFO> mod.Include: Exiting include '" + S(Args(0).Outp) + "'"
+  'LogP "INFO> mod.Include: Exiting include '" + S(Args(0).Outp) + "'"
 END SUB
 
 SUB Mod.Onreset (Args() AS Symbol)
@@ -100,7 +102,7 @@ SUB Mod.Onreset (Args() AS Symbol)
     LogP "WARN> Mod.Onreset: Cannot use type '" + Args(0).Type + "' as first argument. Using as if it were '{'"
   END IF
 
-  S(Outp.Outp) = "cpu_reset:" + nl + S(Args(0).Outp) + nl + " JMP *"
+  S(Outp.Outp) = "cpu_reset:" + NL + S(Args(0).Outp) + NL + " JMP *"
 END SUB
 
 SUB Mod.Sub (Args() AS Symbol)
@@ -154,12 +156,12 @@ SUB ModRun.F (Funcname$, Args() AS Symbol)
 END SUB
 
 SUB ModRun.R (module$, Args() AS Symbol)
-  IF ASC(module$) = ASC("$") THEN Get.Sub MID$(module$, 2), Args()
+  IF ASC(module$) = ASC("$") THEN Run.Sub MID$(module$, 2), Args()
 
-  ASMOutput = ASMOutput + ";ModRun.R " + module$ + nl
-  'LogP module$
+  'ASMOutput = ASMOutput + ";ModRun.R " + module$ + NL
+  LogP "DEBUG> ModRun.R: Running " + module$
 
-  S(Outp.Outp) = ""
+  Outp.Outp = S.Reserve
   SELECT CASE module$
 
     CASE "asm": Mod.Asm Args()
@@ -170,7 +172,9 @@ SUB ModRun.R (module$, Args() AS Symbol)
 
     CASE "if": Mod.If Args()
 
-    CASE "include", "lib": Mod.Include Args()'TODO: Make difference between lib() and include()
+    CASE "include", "lib"
+      IF module$ = "lib" THEN LogP "WARN> ModRun.R: 'lib' is not supported yet, using 'include' instead"
+      Mod.Include Args()'TODO: Make difference between lib() and include()
 
     CASE "onreset": Mod.Onreset Args()
 
@@ -182,6 +186,19 @@ SUB ModRun.R (module$, Args() AS Symbol)
 
     CASE ELSE
       LogP "ERROR> ModRun.R: invalid module '" + module$ + "'"
+
+      FOR i% = 0 TO UBOUND(Args)
+        IF Args(i%).Type = "{" THEN
+
+          LogP "WARN> ModRun.R: Invalid module has '{' type argument, bypassing module and putting direcly into ASMOutput."
+          ASMOutput = ASMOutput + S(Args(i%).Outp)
+          'S.Free Args(i%).Outp
+
+        END IF
+      NEXT
+
+      S.Free Outp.Outp
+
   END SELECT
 END SUB
 
