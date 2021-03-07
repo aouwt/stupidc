@@ -1,99 +1,22 @@
 # stupidc
-Stupid programming language that vaguely resembles C and compiles directly to 6502 assembly
+stupid programming language that vaguely resembles C and compiles directly to 6502 assembly
 
 ## compiling
-tested and works in QBX PDS 7.1 and VBDOS (it probably can run in other earlier versions of VB but I havent tested it.) it ***cannot*** run in QBasic, QB45, or QB64 due to issues with UDTs.
+open MAIN.MAK in QB71 or VB for DOS and press <kbd>F5</kbd>. ***it is important that you use QBX or VB4DOS; it cannot run in QBasic, QB45, or QB64 due to issues with UDTs.*** it also cannot run in any other versions of VisualBasic because they are completely different languages (confusing, right?)
 
-## sample program
-parser doesnt work yet but this is what a Hello World should look like (so far)
+## code structures
+everything is pretty straightfoward, really. it's organized like this:
 
-### hello world
-```stupidc
-system(&BE6502);
-include(&LCD);
+- MAIN.BAS is the main module. it has the parser and controls everything
+  - COMMON.BI is the declarations for the common variables and subs. it MUST be INCLUDEd into EVERY module
+  - SETUP.BI sets up all the variables, arrays, and parses the command-line options. I used it as an INCLUDE because it makes it neater, and makes it separate from the actual compiler. for ...reasons it also has all the INCLUDE and DECLARE statements for the main module
+  - DEFAULTS.BI is the configuration for the compiler. nothing important, really.
+- SCS.BAS is the module that handles parsing SCS files. pretty straightfoward.
+- SCMODS.BAS is the stupidc "modules," as i like to call them. they are the things that turn the commands in the inputted program (after they're parsed) and outputs assembly code
+  - SCMODS.BI is to be deleted later, the SUBs used in SCMODS.BAS aren't needed outside it except for ModRun.R and ModRun.F
 
-onreset({
-  $lcd.init(:lcd.c.2l);
-  $lcd.print(#"Hello, world!");
-});
-```
+keep in mind that this is supposed to run in a DOS enviroment, so filenames should keep to the limitations of most DOS enviroments: no special charaters, no_spaces, 8.3 filenames, and UPPERCASE only. the only exception to this is the .git folder (i think it's case-sensitive, but i need to check that) and .gitignore, but you really shouldn't be editing those from DOS.
 
-#### hello world but more annoying
-```stupidc
-system(&BE6502);
-include(&LCD);
-def(%i);
-
-onreset({
-  $lcd.init(:lcd.c.2l);
-  set(%1,0);
-
-  while(%i,{
-    $lcd.print(#"Hello, world!");
-    inc(%i);
-  });
-});
-```
-
-### learn how to count with stupidc!
-```stupidc
-system(&BE6502);
-include(&LCD);
-def(%i);
-
-onreset({
-  $lcd.init(:lcd.c.2l);
-  
-  while(%i,{
-    $lcd.print(*b2s(%i));
-    inc(%i);
-  )};
-  
-});
-
-```
-
-### interrupt handling demo
-```stupidc
-system(&BE6502);
-include(&LCD);
-
-onreset({
-  $lcd.init(:lcd.c.2l);
-  $lcd.print(#"Reset");
-)};
-
-onirq({
-  $lcd.init(:lcd.c.2l);
-  $lcd.print(#"IRQ");
-  
-  $lcd.locate(:lcd.c.ln2);
-  $lcd.print(#"IRQ OFF");
-  
-  irq(&OFF);
-)};
-
-onnmi({
-  $lcd.init(:lcd.c.2l);
-  $lcd.print(#"NMI");
-  
-  $lcd.locate(:lcd.c.ln2);
-  $lcd.print(#"IRQ ON");
-  
-  irq(&on);
-});
-```
-
-### h
-```stupidc
-system(&BE6502);
-include(&LCD);
-
-onreset({
-  $lcd.init(:lcd.c.2l);
-
-  while(#1,{
-    $lcd.print(#\`h);
-  });
-});
-```
+## sample programs
+doesnt work quite yet but you can find samples in the [SAMPLES folder](https://github.com/all-other-usernames-were-taken/stupidc/tree/main/SAMPLES).
+(i know they're labled as Scala programs, but 'cmon, what other extension should i have chosen?)
