@@ -1,18 +1,18 @@
 # .BAK Backup files
-*.BAK
+**/*.BAK
 
 # IDE Config files
-CURRENT.STS
-QBX.INI
+**/CURRENT.STS
+**/QBX.INI
 
 QBX/
 
 # QB Binary files
-*.BIN
+**/*.BIN
 
 # Compiled executables
-STUPIDC.EXE
-STUPIDC.DLL
+**/*.EXE
+**/*.DLL
 
 # Output files
 OUTPUT.ASM
@@ -22,5 +22,5 @@ OUTPUT.ROM
 LOG.TXT
 
 # .MAK files except for the main one
-*.MAK
-!STUPIDC.MAK
+**/*.MAK
+!/STUPIDC.MAK
