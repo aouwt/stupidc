@@ -49,7 +49,7 @@ sub(&lcd.instruct, {
 	set(`via.b, .pull()); <set PB>
 	
 	set(`via.a, #0); <Clear regs>
-	set(`via.a, :lcd.r.enable); <set enable>
+	set(`via.a, :lcd.r.enable); <set enable>});
 	
 	set(`via.a, #0); <clear regs>
 	

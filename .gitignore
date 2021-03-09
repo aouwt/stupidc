@@ -21,6 +21,4 @@ OUTPUT.ROM
 # Logfile
 LOG.TXT
 
-# .MAK files except for the main one
-**/*.MAK
-!/STUPIDC.MAK
+/GUI

@@ -1,4 +1,5 @@
-'$INCLUDE: 'SETUP.BI'
+DECLARE SUB ModRun.R (module$, Args() AS ANY)
+REM $INCLUDE: 'SETUP.BI'
 
 
 
@@ -17,7 +18,7 @@ LogP "INFO> Entering stage 2"
 Parse a$
 
 LogP "INFO> Finalizing"
-ASMOutput = SCS.GetStrKey("asmhead") + ASMOutput + SCS.GetStrKey("asmfoot")
+ASMOutput = SCS.GetStrKey$("asmhead") + ASMOutput + SCS.GetStrKey$("asmfoot")
 
 
 IF SGN(ErrorCount) = -1 THEN
@@ -34,10 +35,19 @@ SYSTEM
 
 
 ErrorHandler:
-  LogP "INTERNAL> Error #" + LTRIM$(STR$(ERR)) + " at line" + STR$(ERL) + ": " + ERROR$
+  'QBX does not support ERROR$, but VBDOS does. This detects if we're running
+  'in QBX or VBDOS and then prints the available error information.
+
+  IF ERROR$ = "" THEN
+    LogP "INTERNAL> Error #" + LTRIM$(STR$(ERR))
+
+   ELSE
+    LogP "INTERNAL> Error #" + LTRIM$(STR$(ERR)) + ": " + ERROR$
+
+  END IF
 RESUME NEXT
 
-FUNCTION AddLabel$ ()
+STATIC FUNCTION AddLabel$ ()
   Labels& = Labels& + 1
 
   IF Labels& = 0 THEN LogP "ERROR> AddLabel: too many labels! this may create problems with the assembler."
@@ -45,14 +55,14 @@ FUNCTION AddLabel$ ()
   AddLabel$ = LTRIM$(RTRIM$(STR$(Labels&)))
 END FUNCTION
 
-FUNCTION AddSymbol& (symbol AS symbol)
+FUNCTION AddSymbol& (Symbol AS Symbol)
   DO
     i& = i& + 1
   LOOP UNTIL (ASC(Symbols(i&).Name) = 32) OR (i& >= UBOUND(Symbols))
 
-  IF i& >= UBOUND(Symbols) THEN LogP "ERROR> AddSymbol: Out of space for symbol '" + symbol.Name + "'": EXIT FUNCTION
+  IF i& >= UBOUND(Symbols) THEN LogP "ERROR> AddSymbol: Out of space for symbol '" + Symbol.Name + "'": EXIT FUNCTION
 
-  Symbols(i&) = symbol
+  Symbols(i&) = Symbol
   AddSymbol& = i&
 END FUNCTION
 
@@ -76,7 +86,7 @@ FUNCTION FILEEXISTS% (Filename$)
 
 END FUNCTION
 
-STATIC SUB GetPgmArgs (ArgCount AS INTEGER, Args$())
+ STATIC SUB GetPgmArgs (ArgCount AS INTEGER, Args$())
 
   DO
     i% = i% + 1
@@ -124,7 +134,8 @@ FUNCTION LOADFILE$ (Filename$)
 END FUNCTION
 
 SUB LogP (t$)
-
+  SHARED Log.IsLoggingDebug AS INTEGER
+  
   CONST Color.Info = 15
   CONST Color.More = 7
   CONST Color.Error = 4
@@ -134,7 +145,7 @@ SUB LogP (t$)
   CONST Color.Success = 2
   CONST Color.Debug = 9
 
-  ASMOutput = ASMOutput + ";;" + t$ + NL
+  IF LogToASM = -1 THEN ASMOutput = ASMOutput + ";" + t$ + NL
 
   IF ASC(t$) = 32 THEN
 
@@ -148,7 +159,9 @@ SUB LogP (t$)
   C$ = LEFT$(t$, b% - 1)
   M$ = MID$(t$, b%)
   'PRINT
-
+  
+  Log.IsLoggingDebug = 0
+  
   SELECT CASE C$
     CASE "ERROR"
       COLOR Color.Error
@@ -174,6 +187,7 @@ SUB LogP (t$)
 
     CASE "DEBUG"
       COLOR Color.Debug
+      Log.IsLoggingDebug = -1
 
     CASE ELSE
       COLOR Color.More
@@ -182,23 +196,25 @@ SUB LogP (t$)
 
 LogP.Print:
 
-  IF File.Log = 0 THEN
-    File.Log = FREEFILE
-    OPEN LogFile FOR APPEND AS #File.Log
+  IF LogToFile THEN
+    IF File.Log = 0 THEN
+      File.Log = FREEFILE
+      OPEN LogFile FOR APPEND AS #File.Log
 
-    ' "WARN> LogP: File.Log is not opened! Opening temporarily."
+      ' "WARN> LogP: File.Log is not opened! Opening temporarily."
 
-    PRINT #File.Log, USING "(####.##) &"; TIMER - LaunchTime; t$
+      PRINT #File.Log, USING "(####.##) &"; TIMER - LaunchTime; t$
 
-    CLOSE #File.Log
-    File.Log = 0
+      CLOSE #File.Log
+      File.Log = 0
 
-   ELSE
-    PRINT #File.Log, USING "(####.##) &"; TIMER - LaunchTime; t$
-
+     ELSE
+      PRINT #File.Log, USING "(####.##) &"; TIMER - LaunchTime; t$
+    END IF
   END IF
 
 
+  IF Log.IsLoggingDebug THEN EXIT SUB 'Dont log DEBUG to screen
   PRINT C$;
 
   COLOR Color.More
@@ -217,18 +233,18 @@ END SUB
 SUB LogWhere (Text AS STRING, Where AS INTEGER)
   'ON LOCAL ERROR RESUME NEXT
 
-  IF (Where - 16) < 0 THEN
+  IF (Where - 15) < 1 THEN
 
       LogP " " + LEFT$(Text, 30)
-      LogP " " + STRING$(Where - 1, "~") + "^"
-      'LogP " "
+      LogP " " + STRING$(Where, "~") + "^"
+      LogP " "
 
 
     ELSE
 
-      LogP " " + MID$(Text, Where - 16, 30)
+      LogP " " + MID$(Text, Where - 15, 30)
       LogP " " + STRING$(15, "~") + "^"
-      'LogP " "
+      LogP " "
 
   END IF
 
@@ -236,7 +252,7 @@ SUB LogWhere (Text AS STRING, Where AS INTEGER)
 END SUB
 
 SUB Parse (Pgm AS STRING)
-  DIM Char AS STRING * 1, Args(16) AS symbol
+  DIM Char AS STRING * 1, Args(16) AS Symbol
 
   FOR i% = 1 TO LEN(Pgm)
     Char = MID$(Pgm, i%, 1)
@@ -248,6 +264,9 @@ SUB Parse (Pgm AS STRING)
       CASE ")": Level% = Level% - 1
 
       CASE "{": Level% = Level% + 1
+
+      CASE CHR$(34)
+        i% = INSTR(i% + 1, Pgm, CHR$(34))
 
       CASE "}": Level% = Level% - 1
 
@@ -266,10 +285,11 @@ SUB Parse (Pgm AS STRING)
 Parse.RunCmd:
     GOSUB Parse.RunArg
 
-    LogP "DEBUG> Parse: Running"
-    LogWhere Pgm, i%
+    LogP "DEBUG> Parse: Running '" + SymName$ + "'"
 
     Outp.Outp = S.Reserve
+
+    IF LogToASM = -2 THEN ASMOutput = ASMOutput + NL + "; Mod " + SymName$ + NL
 
     IF ASC(SymName$) = ASC("$") THEN
         Run.Sub MID$(SymName$, 2), Args()
@@ -277,13 +297,19 @@ Parse.RunCmd:
         ModRun.R SymName$, Args()
     END IF
 
-    ASMOutput = ASMOutput + S(Outp.Outp) + NL
+    IF LEN(ASMOutput) > 30000 THEN
+      LogP "WARN> Parse: ASMOutput exceeds 31KB, saving to file."
+      PRINT #File.Out, ASMOutput;
+      ASMOutput = ""
+    END IF
+        
+    IF S(Outp.Outp) <> CHR$(255) THEN ASMOutput = ASMOutput + S(Outp.Outp) + NL
 
     Pgm = MID$(Pgm, i% + 1)
 
     FOR i% = 0 TO UBOUND(Args)
-      S.Free Args(i%).Outp
       Args(i%) = BlankSymbol
+      S.Free Args(i%).Outp
     NEXT
     S.Free Outp.Outp
 
@@ -395,28 +421,33 @@ SUB PrintHelp ()
  END 0
 END SUB
 
-SUB Run.Sub (SubName$, Args() AS symbol)
-  FOR i% = 0 TO UBOUND(Symbols)
+SUB Run.Sub (SubName$, Args() AS Symbol)
 
-   IF Symbols(i%).Name = SubName$ GOTO Run.SR.RunSub
-    
-  NEXT
-  LogP "ERROR> Run.Sub: Cannot locate subroutine '" + SubName$ + "'"
-                        
-Run.SR.RunSub:
-  'S% = i%
   i% = 0
   DO
     SELECT CASE ASC(Args(i%).Type)
       CASE ASC("#")
-        S(Outp.Outp) = NL + S(Outp.Outp) + " LDA #" + LTRIM$(STR$(Args(i%).Value)) + NL + " PUSH"
+        S(Outp.Outp) = S(Outp.Outp) + NL + " LDA #" + LTRIM$(STR$(Args(i%).Value))
+        S(Outp.Outp) = S(Outp.Outp) + NL + " PUSH"
 
       CASE ASC("*")
 
       CASE ASC("%")
-        S(Outp.Outp) = NL + S(Outp.Outp) + " LDA" + STR$(Args(i%).Value) + NL + " PUSH"
+        S(Outp.Outp) = S(Outp.Outp) + NL + " LDA VAR_" + Args(i%).Name + NL
+        S(Outp.Outp) = S(Outp.Outp) + " PUSH"
 
-      CASE 32: EXIT DO
+      CASE ASC(":")
+        S(Outp.Outp) = S(Outp.Outp) + " LDA #C_" + Args(i%).Name + NL + " PUSH"
+
+      CASE 34
+        FOR i2% = 1 TO LEN(S(Args(i%).Outp))
+          S(Outp.Outp) = S(Outp.Outp) + NL + " LDA #"
+          S(Outp.Outp) = S(Outp.Outp) + LTRIM$(STR$(ASC(RIGHT$(S(Args(i%).Outp), i2%))))'Go backwards
+          S(Outp.Outp) = S(Outp.Outp) + NL + " PUSH"
+        NEXT
+
+      CASE 32, 0: EXIT DO
+
       CASE ELSE
         LogP "ERROR> Run.Sub: Cannot use type '" + Args(i%).Type + "' in a sub/function"
         EXIT DO
@@ -425,13 +456,20 @@ Run.SR.RunSub:
     i% = i% + 1
   LOOP
 
+  S(Outp.Outp) = S(Outp.Outp) + NL + " JSR SR_" + SubName$ + NL
+
 END SUB
 
 SUB Run.Sym (Code$)
+  S.Free Outp.Outp
+  Outp.Outp = S.Reserve
+
   Outp.Type = LEFT$(Code$, 1)
   SymName$ = MID$(Code$, 2)
 
-  ASMOutput = ASMOutput + ";Run.Sym " + Code$ + NL
+  LogP "DEBUG> Run.Sym: Running symbol"
+  LogWhere Code$, 1
+  IF LogToASM = -2 THEN ASMOutput = ASMOutput + ";Sym '" + Code$ + "'" + NL
 
   SELECT CASE Outp.Type
     CASE "#"
@@ -461,6 +499,7 @@ SUB Run.Sym (Code$)
           END IF
 
         END SELECT
+        S(Outp.Outp) = " LDA #" + LTRIM$(RTRIM$(STR$(Outp.Value))) + NL
 
 
       CASE "*"
@@ -473,17 +512,21 @@ SUB Run.Sym (Code$)
         FOR i% = 0 TO UBOUND(Vars)
           IF Vars(i%).Name = SymName$ THEN
 
-            S(Outp.Outp) = LTRIM$(STR$(Vars(i%).Address))
+            S(Outp.Outp) = S(Outp.Outp) + NL + " LDA " + LTRIM$(STR$(Vars(i%).Address))
             Outp.Name = SymName$
             EXIT FOR
 
           END IF
         NEXT
 
-
+      CASE "$"
+        Outp.Name = SymName$
 
       CASE "{"
+        i% = LEN(ASMOutput)
         Parse SymName$
+        S(Outp.Outp) = MID$(ASMOutput, i%, LEN(ASMOutput) - i%)
+        ASMOutput = LEFT$(ASMOutput, i%)
 
       CASE "&"
         S(Outp.Outp) = SymName$
@@ -499,7 +542,7 @@ SUB Run.Sym (Code$)
 END SUB
 
 SUB S.Free (h AS INTEGER)
-  IF S(h) = "" THEN LogP "WARN> S.Free: 'S(" + LTRIM$(STR$(h)) + ")' is not initialized"
+  'IF S(h) = "" THEN LogP "WARN> S.Free: 'S(" + LTRIM$(STR$(h)) + ")' is not initialized"
   S(h) = CHR$(255)
 END SUB
 

@@ -1,6 +1,6 @@
-'$INCLUDE: 'A:\COMMON.BI'
+REM $INCLUDE: 'A:\COMMON.BI'
 
-SUB Debug.DumpKeys
+SUB Debug.DumpKeys ()
   SHARED Keys AS SCS
 
   PRINT "keys.s:"
