@@ -524,8 +524,11 @@ SUB Run.Sym (Code$)
 
       CASE "{"
         i% = LEN(ASMOutput)
+        a$ = S(Outp.Outp)
+
+        S.Free Outp.Outp
         Parse SymName$
-        S(Outp.Outp) = MID$(ASMOutput, i%, LEN(ASMOutput) - i%)
+        S(Outp.Outp) = a$ + MID$(ASMOutput, i%)', LEN(ASMOutput) - i%)
         ASMOutput = LEFT$(ASMOutput, i%)
 
       CASE "&"

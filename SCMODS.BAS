@@ -15,6 +15,7 @@ DECLARE SUB Mod.System (Args() AS ANY)
 DECLARE SUB Mod.Undef (Args() AS ANY)
 REM $INCLUDE: 'A:\COMMON.BI'
 
+
 SUB Func.Or (Args() AS Symbol)
   S(Outp.Outp) = S(Args(0).Outp) + NL + " STA TEMP" + NL + S(Args(1).Outp) + " ORA TEMP"
 END SUB
@@ -152,6 +153,14 @@ SUB Mod.OnReset (Args() AS Symbol)
   S(Outp.Outp) = "CPU_RESET:" + NL + S(Args(0).Outp) + NL + " JMP *"
 END SUB
 
+SUB Mod.Poke (Args() AS Symbol)
+END SUB
+
+
+SUB Mod.Reg (Args() AS Symbol)
+
+END SUB
+
 SUB Mod.Set (Args() AS Symbol)
   IF Args(0).Type <> "%" THEN
     LogP "WARN> Mod.Set: Cannot use type '" + Args(0).Type + "' as first argument. Using as if it were '%'"
@@ -261,5 +270,4 @@ SUB ModRun.R (module$, Args() AS Symbol)
 
   END SELECT
 END SUB
-
 

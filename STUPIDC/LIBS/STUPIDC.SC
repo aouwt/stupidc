@@ -6,7 +6,7 @@
 
 <---------------->
 
-func(&multiply, {
+func(*multiply, {
 	def(%arg1);
 	def(%arg2);
 	def(%result);
@@ -30,7 +30,7 @@ func(&multiply, {
 
 
 
-sub(&delay, {
+sub($delay, {
 	def(%arg);
 	def(%counter1);
 	def(%counter2);

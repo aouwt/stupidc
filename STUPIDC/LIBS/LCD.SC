@@ -5,14 +5,14 @@
 >
 
 <---------------->
-include(#"VIA");
-include(#"STUPIDC");
+include(&VIA);
+include(&STUPIDC);
 
 def(%print.char);
 def(%printchar.char);
 
 
-sub(&lcd.print, {
+sub($lcd.print, {
 	
 	loop({
 		set(%print.char, .pull()); <Pull the character from the stack>
@@ -24,7 +24,7 @@ sub(&lcd.print, {
 });
 
 
-sub(&lcd.printchar, {
+sub($lcd.printchar, {
 	
 	$lcd.wait();
 	
@@ -37,12 +37,12 @@ sub(&lcd.printchar, {
 });
 
 
-sub(&lcd.locate, {
+sub($lcd.locate, {
 	$lcd.instruct( .or(:lcd.i.locate, .pull()) );
 });
 
 
-sub(&lcd.instruct, {
+sub($lcd.instruct, {
 	
 	$lcd.wait();
 	
@@ -56,7 +56,7 @@ sub(&lcd.instruct, {
 });
 
 
-sub(&lcd.wait, {
+sub($lcd.wait, {
 	set(`via.io.b, #0); <Set PB as input>
 	
 	while( .and(`via.b, :lcd.r.busy), {
